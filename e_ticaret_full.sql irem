@@ -1,0 +1,214 @@
+------------------------------------------------------------
+-- Hazırlayan: İrem Gözaçık
+-- Amaç: Gerçek bir online alışveriş platformunun SQL modellemesi
+------------------------------------------------------------
+
+------------------------------------------------------------
+-- 0. VERİ TABANI OLUŞTURMA
+------------------------------------------------------------
+CREATE DATABASE E_TICARET;
+GO
+USE E_TICARET;
+GO
+
+------------------------------------------------------------
+-- 1. TABLO OLUŞTURMA
+------------------------------------------------------------
+
+CREATE TABLE Kategori (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    ad NVARCHAR(50) NOT NULL
+);
+
+CREATE TABLE Satici (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    ad NVARCHAR(100) NOT NULL,
+    adres NVARCHAR(200)
+);
+
+CREATE TABLE Musteri (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    ad NVARCHAR(50) NOT NULL,
+    soyad NVARCHAR(50) NOT NULL,
+    email NVARCHAR(100) UNIQUE NOT NULL,
+    sehir NVARCHAR(50),
+    kayit_tarihi DATE DEFAULT GETDATE()
+);
+
+CREATE TABLE Urun (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    ad NVARCHAR(100) NOT NULL,
+    fiyat DECIMAL(10,2) NOT NULL,
+    stok INT CHECK(stok >= 0),
+    kategori_id INT,
+    satici_id INT,
+    FOREIGN KEY (kategori_id) REFERENCES Kategori(id),
+    FOREIGN KEY (satici_id) REFERENCES Satici(id)
+);
+
+CREATE TABLE Siparis (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    musteri_id INT,
+    tarih DATE DEFAULT GETDATE(),
+    toplam_tutar DECIMAL(10,2),
+    odeme_turu NVARCHAR(30),
+    FOREIGN KEY (musteri_id) REFERENCES Musteri(id)
+);
+
+CREATE TABLE Siparis_Detay (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    siparis_id INT,
+    urun_id INT,
+    adet INT CHECK(adet > 0),
+    fiyat DECIMAL(10,2),
+    FOREIGN KEY (siparis_id) REFERENCES Siparis(id),
+    FOREIGN KEY (urun_id) REFERENCES Urun(id)
+);
+
+------------------------------------------------------------
+-- 2. VERİ EKLEME
+------------------------------------------------------------
+
+-- Kategoriler
+INSERT INTO Kategori (ad) VALUES
+('Elektronik'),
+('Giyim'),
+('Ev & Yaşam'),
+('Kozmetik'),
+('Spor');
+
+-- Satıcılar
+INSERT INTO Satici (ad, adres) VALUES
+('TechWorld', 'İstanbul'),
+('ModaTime', 'Ankara'),
+('HomeLife', 'İzmir'),
+('BeautyStore', 'Antalya'),
+('SportLine', 'Bursa');
+
+-- Müşteriler
+INSERT INTO Musteri (ad, soyad, email, sehir) VALUES
+('Ali', 'Yılmaz', 'ali@example.com', 'İstanbul'),
+('Ayşe', 'Kara', 'ayse@example.com', 'Ankara'),
+('Mehmet', 'Demir', 'mehmet@example.com', 'İzmir'),
+('Zeynep', 'Şahin', 'zeynep@example.com', 'Antalya'),
+('Ahmet', 'Çelik', 'ahmet@example.com', 'Bursa');
+
+-- Ürünler
+INSERT INTO Urun (ad, fiyat, stok, kategori_id, satici_id) VALUES
+('Kulaklık', 350, 20, 1, 1),
+('Tişört', 120, 50, 2, 2),
+('Blender', 900, 15, 3, 3),
+('Ruj', 80, 30, 4, 4),
+('Koşu Ayakkabısı', 600, 25, 5, 5),
+('Mouse', 250, 10, 1, 1),
+('Elbise', 400, 40, 2, 2);
+
+-- Siparişler
+INSERT INTO Siparis (musteri_id, toplam_tutar, odeme_turu) VALUES
+(1, 700, 'Kredi Kartı'),
+(2, 120, 'Kapıda Ödeme'),
+(3, 1500, 'Banka Transferi'),
+(1, 350, 'Kredi Kartı'),
+(5, 600, 'Kredi Kartı');
+
+-- Sipariş Detayları
+INSERT INTO Siparis_Detay (siparis_id, urun_id, adet, fiyat) VALUES
+(1, 1, 2, 350),
+(2, 2, 1, 120),
+(3, 3, 1, 900),
+(3, 6, 2, 250),
+(4, 4, 1, 80),
+(5, 5, 1, 600);
+
+------------------------------------------------------------
+-- 3. GÜNCELLEME & SİLME İŞLEMLERİ
+------------------------------------------------------------
+
+-- Stoktan düşme (örnek: sipariş sonrası)
+UPDATE Urun
+SET stok = stok - 2
+WHERE id = 1;
+
+-- Ürün fiyat güncelleme
+UPDATE Urun
+SET fiyat = 130
+WHERE ad = 'Tişört';
+
+-- Müşteri silme (örnek)
+DELETE FROM Musteri WHERE id = 999;  -- olmayan müşteri (örnek amaçlı)
+
+-- Tablodaki tüm verileri silme (örnek)
+-- TRUNCATE TABLE Siparis_Detay;
+
+------------------------------------------------------------
+-- 4. RAPORLAMA VE ANALİZ SORGULARI
+------------------------------------------------------------
+
+-- 4.1 En çok sipariş veren 5 müşteri
+SELECT TOP 5 M.ad, M.soyad, COUNT(S.id) AS siparis_sayisi
+FROM Musteri M
+JOIN Siparis S ON M.id = S.musteri_id
+GROUP BY M.ad, M.soyad
+ORDER BY siparis_sayisi DESC;
+
+-- 4.2 En çok satılan ürünler
+SELECT U.ad, SUM(SD.adet) AS toplam_adet
+FROM Urun U
+JOIN Siparis_Detay SD ON U.id = SD.urun_id
+GROUP BY U.ad
+ORDER BY toplam_adet DESC;
+
+-- 4.3 En yüksek cirosu olan satıcılar
+SELECT S.ad AS Satici, SUM(SD.adet * SD.fiyat) AS Ciro
+FROM Satici S
+JOIN Urun U ON S.id = U.satici_id
+JOIN Siparis_Detay SD ON U.id = SD.urun_id
+GROUP BY S.ad
+ORDER BY Ciro DESC;
+
+------------------------------------------------------------
+-- 5. AGGREGATE & GROUP BY SORGULARI
+------------------------------------------------------------
+
+-- Şehirlere göre müşteri sayısı
+SELECT sehir, COUNT(id) AS musteri_sayisi
+FROM Musteri
+GROUP BY sehir;
+
+-- Kategori bazlı toplam satışlar
+SELECT K.ad AS Kategori, SUM(SD.adet * SD.fiyat) AS Toplam_Satis
+FROM Kategori K
+JOIN Urun U ON K.id = U.kategori_id
+JOIN Siparis_Detay SD ON U.id = SD.urun_id
+GROUP BY K.ad;
+
+-- Aylara göre sipariş sayısı
+SELECT DATENAME(MONTH, tarih) AS Ay, COUNT(id) AS Siparis_Sayisi
+FROM Siparis
+GROUP BY DATENAME(MONTH, tarih)
+ORDER BY Siparis_Sayisi DESC;
+
+------------------------------------------------------------
+-- 6. JOIN UYGULAMALARI
+------------------------------------------------------------
+
+-- Siparişlerde müşteri bilgisi + ürün bilgisi + satıcı bilgisi
+SELECT S.id AS SiparisNo, M.ad + ' ' + M.soyad AS Musteri,
+       U.ad AS Urun, Sa.ad AS Satici, SD.adet, SD.fiyat, S.odeme_turu
+FROM Siparis S
+JOIN Musteri M ON S.musteri_id = M.id
+JOIN Siparis_Detay SD ON S.id = SD.siparis_id
+JOIN Urun U ON SD.urun_id = U.id
+JOIN Satici Sa ON U.satici_id = Sa.id;
+
+-- Hiç satılmamış ürünler
+SELECT U.ad AS Urun
+FROM Urun U
+LEFT JOIN Siparis_Detay SD ON U.id = SD.urun_id
+WHERE SD.id IS NULL;
+
+-- Hiç sipariş vermemiş müşteriler
+SELECT M.ad, M.soyad
+FROM Musteri M
+LEFT JOIN Siparis S ON M.id = S.musteri_id
+WHERE S.id IS NULL;
